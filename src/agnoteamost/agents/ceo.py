@@ -103,10 +103,9 @@ def create_ceo_agent(
         role="Chief Executive Officer - Strategic Leadership",
         instructions=CEO_INSTRUCTIONS,
         tools=tools or [],
-        add_history_to_messages=True,
-        num_history_responses=5,
+        add_history_to_context=True,
+        num_history_messages=5,
         markdown=True,
-        show_tool_calls=True,
     )
 
     return agent

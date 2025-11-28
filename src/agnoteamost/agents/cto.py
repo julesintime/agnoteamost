@@ -98,10 +98,9 @@ def create_cto_agent(
         role="Chief Technology Officer - Technology & Architecture",
         instructions=CTO_INSTRUCTIONS,
         tools=tools or [],
-        add_history_to_messages=True,
-        num_history_responses=3,
+        add_history_to_context=True,
+        num_history_messages=3,
         markdown=True,
-        show_tool_calls=True,
     )
 
     return agent

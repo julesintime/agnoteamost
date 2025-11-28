@@ -88,10 +88,9 @@ def create_cfo_agent(
         role="Chief Financial Officer - Financial Analysis & Budget",
         instructions=CFO_INSTRUCTIONS,
         tools=tools or [],
-        add_history_to_messages=True,
-        num_history_responses=3,
+        add_history_to_context=True,
+        num_history_messages=3,
         markdown=True,
-        show_tool_calls=True,
     )
 
     return agent
