@@ -31,8 +31,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "agno[openai,anthropic]>=1.0.0",
+    "agno[openai,anthropic,google]>=1.0.0",
     "mem0ai>=0.1.0",
+    "mcp>=1.0.0",
     "mattermostdriver>=7.0.0",
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.20.0",
