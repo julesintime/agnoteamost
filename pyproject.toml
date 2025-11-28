@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agnoteamost"
+version = "0.1.0"
+description = "Corporate Executive Team Agents with Agno, Mem0, and Mattermost"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Joe", email = "jdoe@email.com" }
+]
+keywords = [
+    "ai-agents",
+    "multi-agent",
+    "agno",
+    "mem0",
+    "mattermost",
+    "erpnext",
+    "gitea"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "agno[openai,anthropic]>=1.0.0",
+    "mem0ai>=0.1.0",
+    "mattermostdriver>=7.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.24.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+postgres = [
+    "psycopg[binary]>=3.1.0",
+]
+qdrant = [
+    "qdrant-client>=1.7.0",
+]
+
+[project.scripts]
+agnoteamost = "agnoteamost.main:main"
+
+[project.urls]
+Homepage = "https://github.com/joe/agnoteamost"
+Repository = "https://git.xuperson.org/joe/agnoteamost"
+Documentation = "https://github.com/joe/agnoteamost#readme"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agnoteamost"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
