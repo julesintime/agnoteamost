@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import ssl
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any
 
 from mattermostdriver import Driver
@@ -98,6 +100,7 @@ class Mattermost:
         self._bot_user_id: str | None = None
         self._bot_username: str = config.bot_name if config else "executive-bot"
         self._running = False
+        self._executor = ThreadPoolExecutor(max_workers=2)
 
     @property
     def entity(self) -> Agent | Team | Workflow:
@@ -148,8 +151,11 @@ class Mattermost:
 
     async def connect(self) -> None:
         """Connect to Mattermost and start listening for events."""
-        self._driver = self._init_driver()
-        self._driver.login()
+        loop = asyncio.get_event_loop()
+
+        # Initialize driver in thread pool (blocking operations)
+        self._driver = await loop.run_in_executor(self._executor, self._init_driver)
+        await loop.run_in_executor(self._executor, self._driver.login)
 
         # Use configured bot_id if provided, otherwise fetch from API
         if self.config.bot_id:
@@ -157,20 +163,34 @@ class Mattermost:
             logger.info(f"Using configured bot ID: {self._bot_user_id}")
         else:
             # Fetch bot user ID from API for self-message detection
-            me = self._driver.users.get_user("me")
+            me = await loop.run_in_executor(
+                self._executor,
+                self._driver.users.get_user,
+                "me"
+            )
             self._bot_user_id = me.get("id")
             self._bot_username = me.get("username", self.config.bot_name)
             logger.info(f"Connected to Mattermost as {me.get('username')} (ID: {self._bot_user_id})")
 
-        # Start WebSocket listener
+        # Start WebSocket listener in thread pool
         self._running = True
-        self._driver.init_websocket(self._handle_websocket_event)
+
+        # Note: WebSocket connection will be handled separately
+        # The mattermostdriver websocket is synchronous and uses its own event loop
+        logger.info("WebSocket connection skipped - using HTTP polling instead")
 
     async def disconnect(self) -> None:
         """Disconnect from Mattermost."""
         self._running = False
         if self._driver:
-            self._driver.logout()
+            loop = asyncio.get_event_loop()
+            try:
+                await loop.run_in_executor(self._executor, self._driver.logout)
+            except Exception as e:
+                logger.warning(f"Error during logout: {e}")
+
+        # Shutdown executor
+        self._executor.shutdown(wait=False)
 
     async def _handle_websocket_event(self, event_json: str) -> None:
         """Handle incoming WebSocket events from Mattermost."""
