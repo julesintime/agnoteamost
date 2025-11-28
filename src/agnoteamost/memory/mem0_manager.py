@@ -1,15 +1,16 @@
 """Mem0 Memory Manager for Executive Team Agents.
 
 Provides persistent, self-improving memory for agents using Mem0.
+Supports both cloud (MemoryClient) and self-hosted (Memory) deployments.
 Supports user-level, agent-level, and session-level memory scoping.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
-from mem0 import Memory
 from pydantic import BaseModel
 
 from agnoteamost.config import settings
@@ -20,6 +21,11 @@ logger = logging.getLogger(__name__)
 class MemoryConfig(BaseModel):
     """Configuration for Mem0 memory manager."""
 
+    # Cloud settings
+    api_key: str | None = None
+    project_id: str | None = None
+
+    # Self-hosted settings
     llm_provider: str = "openai"
     llm_model: str = "gpt-4o-mini"
     embedder_provider: str = "openai"
@@ -27,11 +33,13 @@ class MemoryConfig(BaseModel):
     vector_store_provider: str = "qdrant"
     vector_store_url: str = "http://localhost:6333"
     collection_name: str = "agnoteam_memories"
-    graph_store_enabled: bool = False
 
 
 class Mem0MemoryManager:
     """Memory manager using Mem0 for persistent agent memory.
+
+    Automatically uses Mem0 Cloud if API key is configured,
+    otherwise falls back to self-hosted Memory instance.
 
     Provides:
     - User-level memories (long-term preferences, facts)
@@ -64,26 +72,51 @@ class Mem0MemoryManager:
         """Initialize the Mem0 memory manager.
 
         Args:
-            config: Memory configuration (uses defaults if not provided)
+            config: Memory configuration (uses settings if not provided)
         """
         self.config = config or MemoryConfig(
+            api_key=settings.mem0_api_key,
+            project_id=settings.mem0_project_id,
             llm_provider=settings.mem0_provider,
             vector_store_provider=settings.mem0_vector_store,
             vector_store_url=settings.mem0_vector_store_url,
             collection_name=settings.mem0_collection_name,
         )
 
-        self._memory: Memory | None = None
+        self._client: Any = None
+        self._use_cloud = bool(self.config.api_key)
 
     @property
-    def memory(self) -> Memory:
-        """Get or create Mem0 Memory instance."""
-        if self._memory is None:
-            self._memory = self._create_memory()
-        return self._memory
+    def client(self) -> Any:
+        """Get or create Mem0 client instance."""
+        if self._client is None:
+            self._client = self._create_client()
+        return self._client
 
-    def _create_memory(self) -> Memory:
-        """Create and configure Mem0 Memory instance."""
+    def _create_client(self) -> Any:
+        """Create and configure Mem0 client instance."""
+        if self._use_cloud:
+            return self._create_cloud_client()
+        else:
+            return self._create_oss_client()
+
+    def _create_cloud_client(self) -> Any:
+        """Create Mem0 cloud client (MemoryClient)."""
+        from mem0 import MemoryClient
+
+        logger.info(f"Initializing Mem0 Cloud client (project: {self.config.project_id})")
+
+        # Set API key in environment if not already set
+        if self.config.api_key and not os.getenv("MEM0_API_KEY"):
+            os.environ["MEM0_API_KEY"] = self.config.api_key
+
+        client = MemoryClient(api_key=self.config.api_key)
+        return client
+
+    def _create_oss_client(self) -> Any:
+        """Create self-hosted Mem0 Memory instance."""
+        from mem0 import Memory
+
         config = {
             "llm": {
                 "provider": self.config.llm_provider,
@@ -108,7 +141,7 @@ class Mem0MemoryManager:
             "version": "v1.1",
         }
 
-        logger.info(f"Initializing Mem0 with config: {config}")
+        logger.info(f"Initializing Mem0 self-hosted with config: {config}")
         return Memory.from_config(config)
 
     def add(
@@ -146,8 +179,12 @@ class Mem0MemoryManager:
         if metadata:
             kwargs["metadata"] = metadata
 
+        # Add project_id for cloud client
+        if self._use_cloud and self.config.project_id:
+            kwargs["project_id"] = self.config.project_id
+
         logger.info(f"Adding memory with scope: {kwargs}")
-        result = self.memory.add(messages, **kwargs)
+        result = self.client.add(messages, **kwargs)
         return result
 
     def search(
@@ -182,9 +219,17 @@ class Mem0MemoryManager:
         if filters:
             kwargs["filters"] = filters
 
+        # Add project_id for cloud client
+        if self._use_cloud and self.config.project_id:
+            kwargs["project_id"] = self.config.project_id
+
         logger.debug(f"Searching memories: query='{query}', scope={kwargs}")
-        results = self.memory.search(query, **kwargs)
-        return results
+        results = self.client.search(query, **kwargs)
+
+        # Normalize response format (cloud vs OSS may differ)
+        if isinstance(results, dict) and "results" in results:
+            return results["results"]
+        return results if isinstance(results, list) else []
 
     def get_all(
         self,
@@ -210,7 +255,16 @@ class Mem0MemoryManager:
         if run_id:
             kwargs["run_id"] = run_id
 
-        return self.memory.get_all(**kwargs)
+        # Add project_id for cloud client
+        if self._use_cloud and self.config.project_id:
+            kwargs["project_id"] = self.config.project_id
+
+        results = self.client.get_all(**kwargs)
+
+        # Normalize response format
+        if isinstance(results, dict) and "results" in results:
+            return results["results"]
+        return results if isinstance(results, list) else []
 
     def update(self, memory_id: str, data: str) -> dict[str, Any]:
         """Update a specific memory.
@@ -222,7 +276,7 @@ class Mem0MemoryManager:
         Returns:
             Update result
         """
-        return self.memory.update(memory_id, data)
+        return self.client.update(memory_id, data)
 
     def delete(self, memory_id: str) -> dict[str, Any]:
         """Delete a specific memory.
@@ -233,7 +287,7 @@ class Mem0MemoryManager:
         Returns:
             Delete result
         """
-        return self.memory.delete(memory_id)
+        return self.client.delete(memory_id)
 
     def delete_all(
         self,
@@ -259,7 +313,11 @@ class Mem0MemoryManager:
         if run_id:
             kwargs["run_id"] = run_id
 
-        return self.memory.delete_all(**kwargs)
+        # Add project_id for cloud client
+        if self._use_cloud and self.config.project_id:
+            kwargs["project_id"] = self.config.project_id
+
+        return self.client.delete_all(**kwargs)
 
     def history(self, memory_id: str) -> list[dict[str, Any]]:
         """Get change history for a memory.
@@ -270,7 +328,7 @@ class Mem0MemoryManager:
         Returns:
             List of historical changes
         """
-        return self.memory.history(memory_id)
+        return self.client.history(memory_id)
 
     def get_context_for_agent(
         self,
@@ -290,23 +348,27 @@ class Mem0MemoryManager:
         Returns:
             Formatted context string
         """
-        memories = self.search(
-            query=query,
-            agent_id=agent_name,
-            user_id=user_id,
-            limit=5,
-        )
+        try:
+            memories = self.search(
+                query=query,
+                agent_id=agent_name,
+                user_id=user_id,
+                limit=5,
+            )
 
-        if not memories:
+            if not memories:
+                return ""
+
+            context_parts = ["## Relevant Memories", ""]
+            for mem in memories:
+                memory_text = mem.get("memory", mem.get("text", ""))
+                score = mem.get("score", mem.get("relevance_score", 0))
+                context_parts.append(f"- {memory_text} (relevance: {score:.2f})")
+
+            return "\n".join(context_parts)
+        except Exception as e:
+            logger.warning(f"Error fetching memory context: {e}")
             return ""
-
-        context_parts = ["## Relevant Memories", ""]
-        for mem in memories:
-            memory_text = mem.get("memory", mem.get("text", ""))
-            score = mem.get("score", 0)
-            context_parts.append(f"- {memory_text} (relevance: {score:.2f})")
-
-        return "\n".join(context_parts)
 
 
 # Global memory manager instance

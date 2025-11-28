@@ -7,10 +7,9 @@ and making strategic decisions. It synthesizes input from CFO, COO, and CTO.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
 
 from agnoteamost.config import settings
 from agnoteamost.memory.mem0_manager import memory_manager
@@ -57,6 +56,32 @@ You have access to organizational memory. Use it to:
 """
 
 
+def get_model(model_id: str | None = None, is_leader: bool = True) -> Any:
+    """Get the appropriate model based on configuration.
+
+    Args:
+        model_id: Optional model ID override
+        is_leader: Whether this is a team leader (uses default_model) or specialist
+
+    Returns:
+        Configured model instance
+    """
+    model_name = model_id or (settings.default_model if is_leader else settings.specialist_model)
+
+    if settings.use_gemini or "gemini" in model_name.lower():
+        from agno.models.google import Gemini
+        return Gemini(
+            id=model_name,
+            api_key=settings.google_api_key,
+        )
+    else:
+        from agno.models.openai import OpenAIChat
+        return OpenAIChat(
+            id=model_name,
+            api_key=settings.openai_api_key,
+        )
+
+
 def create_ceo_agent(
     tools: list[Function] | None = None,
     model_id: str | None = None,
@@ -70,22 +95,7 @@ def create_ceo_agent(
     Returns:
         Configured CEO agent
     """
-    model = OpenAIChat(
-        id=model_id or settings.default_model,
-        api_key=settings.openai_api_key,
-    )
-
-    # Create memory-aware instructions
-    def get_instructions_with_memory(context: dict) -> str:
-        """Inject relevant memories into instructions."""
-        query = context.get("message", "")
-        memory_context = memory_manager.get_context_for_agent(
-            agent_name="ceo",
-            query=query,
-        )
-        if memory_context:
-            return f"{CEO_INSTRUCTIONS}\n\n{memory_context}"
-        return CEO_INSTRUCTIONS
+    model = get_model(model_id, is_leader=True)
 
     agent = Agent(
         name="CEO",

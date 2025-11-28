@@ -34,6 +34,7 @@ class MattermostConfig(BaseModel):
     port: int = 443
     reply_to_mentions_only: bool = True
     bot_name: str = "executive-bot"
+    bot_id: str = ""  # Bot user ID for self-message detection (optional, fetched if not provided)
     max_message_length: int = 40000
 
 
@@ -95,6 +96,7 @@ class Mattermost:
 
         self._driver: Driver | None = None
         self._bot_user_id: str | None = None
+        self._bot_username: str = config.bot_name if config else "executive-bot"
         self._running = False
 
     @property
@@ -131,10 +133,16 @@ class Mattermost:
         self._driver = self._init_driver()
         self._driver.login()
 
-        # Get bot user ID for mention detection
-        me = self._driver.users.get_user("me")
-        self._bot_user_id = me.get("id")
-        logger.info(f"Connected to Mattermost as {me.get('username')} (ID: {self._bot_user_id})")
+        # Use configured bot_id if provided, otherwise fetch from API
+        if self.config.bot_id:
+            self._bot_user_id = self.config.bot_id
+            logger.info(f"Using configured bot ID: {self._bot_user_id}")
+        else:
+            # Fetch bot user ID from API for self-message detection
+            me = self._driver.users.get_user("me")
+            self._bot_user_id = me.get("id")
+            self._bot_username = me.get("username", self.config.bot_name)
+            logger.info(f"Connected to Mattermost as {me.get('username')} (ID: {self._bot_user_id})")
 
         # Start WebSocket listener
         self._running = True
@@ -180,13 +188,20 @@ class Mattermost:
 
             # Check if we should respond
             is_dm = data.get("channel_type") == "D"
-            is_mention = self._bot_user_id and f"@{self.config.bot_name}" in message
+
+            # Check for mentions - Mattermost uses @username format
+            # Also check post props for explicit mentions
+            props = post.get("props", {})
+            mentioned_ids = props.get("mentioned_ids", []) or []
+            is_explicit_mention = self._bot_user_id and self._bot_user_id in mentioned_ids
+            is_text_mention = f"@{self._bot_username}" in message or f"@{self.config.bot_name}" in message
+            is_mention = is_explicit_mention or is_text_mention
 
             if self.reply_to_mentions_only and not is_dm and not is_mention:
                 return
 
             # Clean message (remove bot mention)
-            clean_message = message.replace(f"@{self.config.bot_name}", "").strip()
+            clean_message = message.replace(f"@{self._bot_username}", "").replace(f"@{self.config.bot_name}", "").strip()
 
             if not clean_message:
                 return

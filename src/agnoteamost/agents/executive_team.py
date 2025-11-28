@@ -10,10 +10,9 @@ import logging
 from typing import TYPE_CHECKING
 
 from agno.team import Team
-from agno.models.openai import OpenAIChat
 
 from agnoteamost.config import settings
-from agnoteamost.agents.ceo import create_ceo_agent
+from agnoteamost.agents.ceo import create_ceo_agent, get_model
 from agnoteamost.agents.cfo import create_cfo_agent
 from agnoteamost.agents.coo import create_coo_agent
 from agnoteamost.agents.cto import create_cto_agent
@@ -100,11 +99,8 @@ def create_executive_team(
     coo = create_coo_agent(tools=coo_tools)
     cto = create_cto_agent(tools=cto_tools)
 
-    # Create team with CEO as leader
-    model = OpenAIChat(
-        id=model_id or settings.default_model,
-        api_key=settings.openai_api_key,
-    )
+    # Get team leader model (uses default_model which is Gemini)
+    model = get_model(model_id, is_leader=True)
 
     team = Team(
         name="Executive Team",

@@ -10,9 +10,9 @@ import logging
 from typing import TYPE_CHECKING
 
 from agno.agent import Agent
-from agno.models.openai import OpenAIChat
 
 from agnoteamost.config import settings
+from agnoteamost.agents.ceo import get_model
 from agnoteamost.memory.mem0_manager import memory_manager
 
 if TYPE_CHECKING:
@@ -80,10 +80,7 @@ def create_cfo_agent(
     Returns:
         Configured CFO agent
     """
-    model = OpenAIChat(
-        id=model_id or settings.specialist_model,
-        api_key=settings.openai_api_key,
-    )
+    model = get_model(model_id, is_leader=False)
 
     agent = Agent(
         name="CFO",

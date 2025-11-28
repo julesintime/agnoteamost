@@ -82,6 +82,7 @@ def create_app() -> FastAPI:
         token=settings.mattermost_token,
         team=settings.mattermost_team,
         bot_name=settings.mattermost_bot_name,
+        bot_id=settings.mattermost_bot_id,
         reply_to_mentions_only=settings.mattermost_reply_to_mentions_only,
     )
 
