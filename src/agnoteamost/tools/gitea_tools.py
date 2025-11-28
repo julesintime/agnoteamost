@@ -32,7 +32,7 @@ def create_gitea_tools() -> MCPTools:
     logger.info(f"Initializing Gitea MCP tools from {settings.gitea_mcp_url}")
 
     mcp_tools = MCPTools(
-        transport="sse",
+        transport="streamable-http",
         url=settings.gitea_mcp_url,
         tool_name_prefix="gitea_",
     )

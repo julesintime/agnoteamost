@@ -117,11 +117,29 @@ class Mattermost:
 
     def _init_driver(self) -> Driver:
         """Initialize the Mattermost driver."""
+        # Parse URL to extract hostname (driver expects hostname only, not full URL)
+        url = self.config.url
+        if url.startswith("https://"):
+            hostname = url.replace("https://", "")
+            scheme = "https"
+            port = 443
+        elif url.startswith("http://"):
+            hostname = url.replace("http://", "")
+            scheme = "http"
+            port = 80
+        else:
+            hostname = url
+            scheme = self.config.scheme
+            port = self.config.port
+
+        # Remove trailing slash if present
+        hostname = hostname.rstrip("/")
+
         driver = Driver({
-            "url": self.config.url,
+            "url": hostname,
             "token": self.config.token,
-            "scheme": self.config.scheme,
-            "port": self.config.port,
+            "scheme": scheme,
+            "port": port,
             "basepath": "/api/v4",
             "verify": True,
             "timeout": 30,

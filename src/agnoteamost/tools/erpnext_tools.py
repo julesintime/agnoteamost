@@ -32,7 +32,7 @@ def create_erpnext_crm_tools() -> MCPTools:
     logger.info(f"Initializing ERPNext CRM MCP tools from {settings.erpnext_crm_mcp_url}")
 
     mcp_tools = MCPTools(
-        transport="sse",
+        transport="streamable-http",
         url=settings.erpnext_crm_mcp_url,
         tool_name_prefix="erpnext_crm_",
     )
@@ -56,7 +56,7 @@ def create_erpnext_projects_tools() -> MCPTools:
     logger.info(f"Initializing ERPNext Projects MCP tools from {settings.erpnext_projects_mcp_url}")
 
     mcp_tools = MCPTools(
-        transport="sse",
+        transport="streamable-http",
         url=settings.erpnext_projects_mcp_url,
         tool_name_prefix="erpnext_projects_",
     )
